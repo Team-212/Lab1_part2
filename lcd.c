@@ -10,6 +10,7 @@
 #include <xc.h>
 #include "lcd.h"
 #include "timer.h"
+#include <string.h>
 
 /* The pins that you will use for the lcd control will be
  * LCD_RS      RC4
@@ -22,9 +23,11 @@
  * help you debug your implementation!
  */
 
-#define LCD_DATA LATE; // is this right??
+#define LCD_DATA LATE;// is this right??
 #define LCD_RS LATCbits.LATC4 
-#define LCD_E LATCbits.LATC2  
+#define LCD_E LATCbits.LATC2
+//#define LCD_E2 LATBbits.LATB10
+//#define LCD_RS2 LATBbits.LATB12
 
 #define TRIS_D7 TRISEbits.TRISE1
 #define TRIS_D6 TRISEbits.TRISE3
@@ -32,10 +35,23 @@
 #define TRIS_D4 TRISEbits.TRISE7
 #define TRIS_RS TRISCbits.TRISC4
 #define TRIS_E TRISCbits.TRISC2 
+//#define TRIS_E2 TRISBbits.TRISB10
+//#define TRIS_RS2 TRISBbits.TRISB12
+
+
+#define LAT_D7 LATEbits.LATE1
+#define LAT_D6 LATEbits.LATE3
+#define LAT_D5 LATEbits.LATE5
+#define LAT_D4 LATEbits.LATE7
+
+
 #define OUTPUT 0
 #define INPUT 1
 #define ON 1
 #define OFF 0
+
+
+
 
 /* This function should take in a two-byte word and writes either the lower or upper
  * byte to the last four bits of LATE. Additionally, according to the LCD data sheet
@@ -46,20 +62,34 @@
  */
 void writeFourBits(unsigned char word, unsigned int commandType, unsigned int delayAfter, unsigned int lower){
     //TODO:
+    
     // set the commandType (RS value)
-    LATEbits.LATE0 = word&0x01;// assigns bit value to output for each
-    LATEbits.LATE2 = word&0x02;
-    LATEbits.LATE4 = word&0x04;
-    LATEbits.LATE6 = word&0x08;
+    if(lower == 1){
+    LAT_D4 = word&0x01;// assigns bit value to output for each
+    LAT_D5 = (word&0x02)>>1;
+    LAT_D6 = (word&0x04)>>2;
+    LAT_D7 = (word&0x08)>>3;
+    }
+    
+    else{ 
+    LAT_D4 = (word&0x10)>>4;// assigns bit value to output for each (higher bits)
+    LAT_D5 = (word&0x20)>>5;
+    LAT_D6 = (word&0x40)>>6;
+    LAT_D7 = (word&0x80)>>7;  
+    }
     
     
-    // This uses latch E!!
+    LCD_RS = commandType;
+    
+   
     //enable
-    LCD_E = 1;
+    LCD_E = 1;// enable
     //delay
-    delayUs(5000);// 5ms for now
+    delayUs(1);// 1 for now
     //disable
-    LCD_E = 0;
+    LCD_E = 0;// disable
+    
+    delayUs(delayAfter);
     
 }
 
@@ -68,12 +98,20 @@ void writeFourBits(unsigned char word, unsigned int commandType, unsigned int de
  */
 void writeLCD(unsigned char word, unsigned int commandType, unsigned int delayAfter){
     //TODO:
+    
+    writeFourBits(word, commandType, delayAfter, 0);// higher bits
+    
+    writeFourBits(word, commandType, delayAfter, 1);// lower bits
+            
 }
 
 /* Given a character, write it to the LCD. RS should be set to the appropriate value.
  */
 void printCharLCD(char c) {
     //TODO:
+    
+    writeLCD(c, 1, 50);
+    
 }
 /*Initialize the LCD
  */
@@ -82,48 +120,72 @@ void initLCD(void) {
     
     
     //set as output 
-    TRISEbits.TRISE1 = OUTPUT;// D7
-    TRISEbits.TRISE3 = OUTPUT;// D6
-    TRISEbits.TRISE5 = OUTPUT;// D5
-    TRISEbits.TRISE7 = OUTPUT;// D4
-    TRISCbits.TRISC4 = OUTPUT;// RS
-    TRISCbits.TRISC2 = OUTPUT;// E
+    TRIS_D7 = OUTPUT;// D7
+    TRIS_D6 = OUTPUT;// D6
+    TRIS_D5 = OUTPUT;// D5
+    TRIS_D4 = OUTPUT;// D4
+    TRIS_RS = OUTPUT;// RS
+    TRIS_E = OUTPUT;// E
+    
+    ANSELEbits.ANSE5 = 0;// set analog pin to digital
+    ANSELEbits.ANSE7 = 0;// set analog pin to digital
+    
+    //ANSELBbits.ANSB10 = 0;// set analog pin to digital
+    //ANSELBbits.ANSB12 = 0;
  
-    // set pullup resistors
-    CNPUEbits.CNPUE1 = ON;
-    CNPUEbits.CNPUE3 = ON;
-    CNPUEbits.CNPUE5 = ON;
-    CNPUEbits.CNPUE7 = ON;
-    CNPUCbits.CNPUC4 = ON;
-    CNPUCbits.CNPUC2 = ON;
-    
     //set initial values to 0
-    LATEbits.LATE1 = OFF;
-    LATEbits.LATE3 = OFF;
-    LATEbits.LATE5 = OFF;
-    LATEbits.LATE7 = OFF;
-    LATCbits.LATC4 = OFF;
-    LATCbits.LATC2 = OFF;
+    LAT_D7 = OFF;
+    LAT_D6 = OFF;
+    LAT_D5 = OFF;
+    LAT_D4 = OFF;
     
-
+    //LCD_E = OFF;
+    //LCD_RS = OFF;
+  
+    
     // Initilization sequence utilizes specific LCD commands before the general configuration
     // commands can be utilized. The first few initilition commands cannot be done using the
     // WriteLCD function. Additionally, the specific sequence and timing is very important.
+    
+    //******
+    
+    // wait 15 ms or more after VDD = 4.5V
+    delayUs(20000);
+    
+    //Rs = 0; R/W = 0; DB7 = 0; DB6 = 0; DB5 = 1; DB4 = 1;
+   
+    writeFourBits(0x03, 0, 4100, 1);
+    writeFourBits(0x03, 0, 100, 1);
+    writeFourBits(0x03, 0, 100, 1);
+    writeFourBits(0x02, 0, 100, 1);
+    
+    writeFourBits(0x02, 0, 40, 1);
+    writeFourBits(0x08, 0, 40, 1);
+    
+    writeFourBits(0x00, 0, 40, 1);
+    writeFourBits(0x08, 0, 40, 1);
+    
+    writeFourBits(0x00, 0, 1500, 1);
+    writeFourBits(0x01, 0, 1500, 1);
+    
+    writeFourBits(0x00, 0, 40, 1);
+    writeFourBits(0x06, 0, 40, 1);
+   
+    writeFourBits(0x00, 0, 40, 1);    
+    writeFourBits(0x0C, 0, 40, 1);
+    
+    
+    /*OR after 4-bit init
+     
+     writeLCD(0x28, 0, 50);
+     writeLCD(0x08, 0, 50);
+     writeLCD(0x01, 0, 1700);
+     writeLCD(0x07, 0, 50);
+     writeLCD(0xCC, 0, 50);
+     
+     */
+    
 
-    // Enable 4-bit interface
-
-    // Function Set (specifies data width, lines, and font.
-
-    // 4-bit mode initialization is complete. We can now configure the various LCD
-    // options to control how the LCD will function.
-
-    // TODO: Display On/Off Control
-        // Turn Display (D) Off
-    // TODO: Clear Display (The delay is not specified in the data sheet at this point. You really need to have the clear display delay here.
-    // TODO: Entry Mode Set
-        // Set Increment Display, No Shift (i.e. cursor move)
-    // TODO: Display On/Off Control
-        // Turn Display (D) On, Cursor (C) Off, and Blink(B) Off
 }
 
 /*
@@ -132,6 +194,17 @@ void initLCD(void) {
  * Since a string is just a character array, try to be clever with your use of pointers.
  */
 void printStringLCD(const char* s) {
+    
+    int i = 0;
+    
+    while(s[i] != '\0'){
+        
+        printCharLCD(s[i]);
+        
+        i++;
+        
+    }
+    
     //TODO:
 }
 
@@ -139,12 +212,26 @@ void printStringLCD(const char* s) {
  * Clear the display.
  */
 void clearLCD(){
+    // clear LCD is the bit string "0000000001"
+    writeLCD(0x01, 0, 1640);
+    
 }
 
 /*
  Use the command for changing the DD RAM address to put the cursor somewhere.
  */
 void moveCursorLCD(unsigned char x, unsigned char y){
+    //DDRAM is bit string "001ADD" after the first three bits, data can be written or read
+    
+    unsigned char addr;
+    
+    addr = (y-1)*0x40+(x-1);
+    addr = addr + 0x80;
+    
+    writeLCD(addr, 0, 50);
+    
+    
+    
 }
 
 /*
@@ -154,8 +241,11 @@ void moveCursorLCD(unsigned char x, unsigned char y){
  */
 void testLCD(){
     initLCD();
+    
     int i = 0;
     printCharLCD('c');
+    
+    
     for(i = 0; i < 1000; i++) delayUs(1000);
     clearLCD();
     printStringLCD("Hello!");
@@ -163,4 +253,6 @@ void testLCD(){
     for(i = 0; i < 1000; i++) delayUs(1000);
     printStringLCD("Hello!");
     for(i = 0; i < 1000; i++) delayUs(1000);
+    
 }
+

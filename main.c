@@ -20,9 +20,15 @@
 int main(void)
 {
     SYSTEMConfigPerformance(10000000);
+    initTimer2();
+    
+testLCD();
+        
     while(1)
     {
-        testLCD();
+   
+        //testLCD();
+        
     }
     
     return 0;
